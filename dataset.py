@@ -28,6 +28,8 @@ def get_data():
     """
     Extracts the raw data from the zip files if it exists and puts them into the raw/(dev|test) folders
     """
+    os.makedirs(config.data_raw_dev)
+    os.makedirs(config.data_raw_test)
     raw_dev = pathlib.Path(config.data_raw_dev)
     files_raw_dev = list(raw_dev.glob("*.zip"))
     if len(files_raw_dev) == 1:
