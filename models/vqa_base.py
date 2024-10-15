@@ -5,7 +5,7 @@ from keras.applications import ResNet50
 
 import config
 import datetime
-from transformers import ViTFeatureExtractor, TFViTModel,BertTokenizer
+from transformers import ViTFeatureExtractor, TFViTModel, BertTokenizer
 import tensorflow_hub as hub
 
 
@@ -43,7 +43,6 @@ class VQA(Model):
         x = self.dense(x)
         output = self.dense_output(x)
         return output
-        
 
 
 @utils.register_keras_serializable()

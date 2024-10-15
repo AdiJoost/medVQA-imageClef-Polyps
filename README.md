@@ -1,7 +1,12 @@
 # medVQA-imageClef-Polyps
+## Data
+Get the Data from:
+    devset_url = https://drive.google.com/uc?id=1jTyLWwcHzbLpWjSNwmgiiavXDjuQe5y7&export=download
+    testset_url= https://drive.google.com/uc?id=1PQPiOkyfQrLJ5wWxkHZy_FYIdL9hXiMl&export=download
 
+Unzip them into the data/raw/dev and data/raw/test folders
 
-# Guidelines
+## Guidelines
 Run files as python module, then imports will just work
 -m flag and folders separated by dots not backslashes
 
@@ -13,15 +18,15 @@ when debugging select: debug using launch.json configuration
 
 
 
-# Paths
+## Paths
 Paths that are used in multiple locations should be defined in config.py
 Always build paths using os.path.join pr with Pathlib! 
 
 
-# Variables
+## Variables
 I recommend using_this_type_but_dont_care_too_much_what_you_do
 
-# dependencies
+## dependencies
 Use
 environment_server.yml
 environment_win.yml

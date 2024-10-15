@@ -18,3 +18,11 @@ data_path = os.path.join(cwd, "data")
 
 data_raw = os.path.join(data_path, "raw")
 data_processed = os.path.join(data_path, "processed")
+
+#dev & test sets
+data_raw_dev = os.path.join(data_raw, "dev")
+data_raw_test = os.path.join(data_raw, "test")
+
+data_processed_dev = os.path.join(data_processed, "dev")
+data_processed_test = os.path.join(data_processed, "test")
+

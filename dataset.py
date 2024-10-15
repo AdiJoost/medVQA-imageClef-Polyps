@@ -5,9 +5,11 @@ import config
 import os
 import cv2
 import matplotlib.pyplot as plt
-
-
-
+import requests
+import zipfile
+import datetime
+import pathlib
+import shutil
 
 # Download data to data/raw folder 
 
@@ -19,8 +21,37 @@ import matplotlib.pyplot as plt
 
 
 def main():
-    pass
+    get_data()
 
+
+def get_data():
+    """
+    Extracts the raw data from the zip files if it exists and puts them into the raw/(dev|test) folders
+    """
+    raw_dev = pathlib.Path(config.data_raw_dev)
+    files_raw_dev = list(raw_dev.glob("*.zip"))
+    if len(files_raw_dev) == 1:
+        dev_zip = files_raw_dev[0]
+        unzip(dev_zip, config.data_raw_dev)
+        
+    raw_test = pathlib.Path(config.data_raw_test)
+    files_raw_test = list(raw_test.glob("*.zip"))
+    if len(files_raw_test) == 1:
+        test_zip = files_raw_test[0]
+        unzip(test_zip, config.data_raw_test)
+    
+
+def unzip(zip_file, destination):
+    with zipfile.ZipFile(zip_file, 'r') as zip_ref:
+        zip_ref.extractall(destination)
+    print(f"Extracted contents to the '{destination}' folder.")
+    os.remove(zip_file)
+
+    
+
+
+
+    
 
 def prepare_all_wafer_images():
     ok_raw = [os.path.join(config.wafer_ok_raw_path, filename) for filename in os.listdir(config.wafer_ok_raw_path)]
