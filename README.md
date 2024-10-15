@@ -13,10 +13,24 @@ when debugging select: debug using launch.json configuration
 
 
 
-## Paths
+# Paths
 Paths that are used in multiple locations should be defined in config.py
 Always build paths using os.path.join pr with Pathlib! 
 
 
-## Variables
+# Variables
 I recommend using_this_type_but_dont_care_too_much_what_you_do
+
+# dependencies
+Use
+environment_server.yml
+environment_win.yml
+
+
+Export
+conda env export > environment.yml
+
+Create
+conda env create -f environment.yml
+
+Update
