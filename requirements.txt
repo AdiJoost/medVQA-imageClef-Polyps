@@ -6,3 +6,4 @@ tensorflow
 keras
 transformers
 tensorflow_hub
+opencv-python
