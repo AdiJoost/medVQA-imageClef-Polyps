@@ -2,3 +2,8 @@ numpy
 pandas
 matplotlib
 notebook
+tensorflow
+keras
+transformers
+tensorflow_hub
+opencv-python
