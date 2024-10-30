@@ -3,7 +3,6 @@ import numpy as np
 from keras import datasets, utils
 import config
 import os
-import cv2
 import matplotlib.pyplot as plt
 import requests
 import zipfile
@@ -49,8 +48,7 @@ def main():
     
 def get_dev_datasets():
     """
-    Returns the train, test, val datasets of the dev dataset in format
-    ((image, question), answer_vector)
+    Returns train_ds, test_ds, val_ds datasets of the dev portion of the date in format: ((image, question), answer_vector)
     """
     
     if not os.path.exists(os.path.join(config.data_raw_dev, "X_train.npy")):
@@ -69,6 +67,8 @@ def dataset_from_X_y(X,y):
     ds = tf.data.Dataset.from_tensor_slices((X,y))
     ds = ds.map(lambda x,y: (load_image_from_ID(x), y), num_parallel_calls=tf.data.AUTOTUNE)
     ds = ds.prefetch(buffer_size=tf.data.AUTOTUNE)
+    # probably need to tokenize/make the embedding for the question here already because of datatype issues when dealing with strings in the graph
+    
     return ds.batch(batch_size=64)
 
 def load_image_from_ID(X):
