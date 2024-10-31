@@ -1,5 +1,5 @@
 import numpy as np
-from numpy import MatLike
+from cv2.typing import MatLike
 import cv2
 
 def preprocess_image(rawImage: MatLike, blurredItterations: int = 3) -> MatLike:
