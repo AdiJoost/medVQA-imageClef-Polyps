@@ -1,4 +1,3 @@
-from sympy import false
 import torch
 from torch.utils.data import Dataset, DataLoader
 from transformers import AutoTokenizer, AutoImageProcessor
@@ -10,9 +9,10 @@ from os.path import join
 import pathlib
 import json
 from PIL import Image
-from torchvision import transforms
-from tqdm import tqdm
 import config
+from torch.nn.utils.rnn import pad_sequence
+
+
 
 QUESTIONS_TO_BE_ANSWERED = [
     "What type of procedure is the image taken from?",
@@ -41,11 +41,6 @@ class VQADataset(Dataset):
         self.y = y
         self.image_processor = image_processor
         self.tokenizer = tokenizer
-        # self.image_transform = transforms.Compose([
-        #     transforms.Resize((224, 224)),  # Assuming BEIT's expected input size
-        #     transforms.ToTensor(),
-        #     transforms.Normalize([0.5], [0.5])  # Normalization example, adjust as needed
-        # ])
 
     def __len__(self):
         return len(self.X)
@@ -57,22 +52,22 @@ class VQADataset(Dataset):
         
         # Load and preprocess image
         image = Image.open(image_path).convert('RGB')
-        # image = self.image_transform(image)
         image = self.image_processor(images=image, return_tensors="pt")["pixel_values"].squeeze()
         
+        # Tokenize question with attention mask
+        question_tokens = self.tokenizer(
+            question,
+            padding='longest', #padded to longest question
+            return_tensors='pt'
+        )
         
-        # Tokenize question
-        question_tokens = self.tokenizer(question, 
-                                         padding='longest', 
-                                         max_length=24, 
-                                         truncation=True, 
-                                         return_tensors='pt')
-        question_ids = question_tokens["input_ids"].squeeze()  # Convert from tensor to flat array
-
+        question_ids = question_tokens["input_ids"].squeeze()
+        attention_mask = question_tokens["attention_mask"].squeeze()  # Get attention mask
+        
         # Get answer vector
         answer_vector = torch.tensor(self.y[idx], dtype=torch.float32)
         
-        return (image, question_ids), answer_vector
+        return (image, question_ids, attention_mask), answer_vector
 
 def _load_dev_data():
     if not os.path.exists(join(config.data_processed_dev, "X_train.npy")):
@@ -164,6 +159,20 @@ def _encode_dev_data(save=True):
         np.save(join(config.data_processed_dev, "X_val.npy"), X_val)
         np.save(join(config.data_processed_dev, "y_val.npy"), y_val)
 
+def collate_fn(batch):
+    images, questions, attention_masks, labels = zip(
+        *[(item[0][0], item[0][1], item[0][2], item[1]) for item in batch]
+    )
+    
+    images = torch.stack(images)
+    questions_padded = pad_sequence(questions, batch_first=True, padding_value=0)
+    attention_masks_padded = pad_sequence(attention_masks, batch_first=True, padding_value=0)
+    labels = torch.stack(labels)
+    
+    return (images, questions_padded, attention_masks_padded), labels
+
+
+    
 def get_dev_data():
     image_processor = AutoImageProcessor.from_pretrained("microsoft/beit-base-patch16-224-pt22k-ft22k")
     tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
@@ -177,9 +186,9 @@ def get_dev_data():
     test_dataset = VQADataset(X_test, y_test, image_processor, tokenizer)
     val_dataset = VQADataset(X_val, y_val, image_processor, tokenizer)
 
-    train_loader = DataLoader(train_dataset, batch_size=64, shuffle=False)
-    test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False)
-    val_loader = DataLoader(val_dataset, batch_size=64, shuffle=False)
+    train_loader = DataLoader(train_dataset, batch_size=64, shuffle=False, collate_fn=collate_fn)
+    test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False, collate_fn=collate_fn)
+    val_loader = DataLoader(val_dataset, batch_size=64, shuffle=False, collate_fn=collate_fn)
 
     print("Data loaded successfully in PyTorch format.")
 

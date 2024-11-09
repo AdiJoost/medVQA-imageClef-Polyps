@@ -3,7 +3,7 @@ import os
 from keras import Model, models,  layers, utils, callbacks, optimizers, losses, metrics
 import config
 import datetime
-from transformers import AutoTokenizer, AutoFeatureExtractor, AutoModel, AutoModelForImageClassification
+from transformers import AutoTokenizer, AutoFeatureExtractor, AutoModel, TfAutoModelForImageClassification
 import tensorflow_hub as hub
 import numpy as np
 
