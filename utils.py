@@ -11,7 +11,11 @@ def preprocess_image(rawImage: MatLike, blurredItterations: int = 3) -> MatLike:
 
     result = np.where(binary_mask[:, :, np.newaxis] == 1, blurred_image, rawImage)
     inpainted = cv2.inpaint(result, binary_mask, 10, cv2.INPAINT_TELEA)
-    return inpainted
+    blackremoved = removeBlackBackground(inpainted)
+    _, thresholded = cv2.threshold(grayScale, 20, 255, cv2.THRESH_BINARY_INV)
+    threshold_mask = cv2.merge([thresholded] * 3)
+    blackRemovedDone = np.where(threshold_mask == 255, blackremoved, inpainted)
+    return blackRemovedDone, inpainted
 
 def _get_specular_highlight_region(grayScaleImage: MatLike, threshold: int = 180) -> MatLike:
     _, thresholded = cv2.threshold(grayScaleImage, threshold, 255, cv2.THRESH_BINARY)
@@ -36,19 +40,19 @@ def _getBlurredImage(rawImage: MatLike, blurredItterations: int) -> MatLike:
 
 def removeBlackBackground(rawImage: MatLike) -> MatLike:
     gray = cv2.cvtColor(rawImage, cv2.COLOR_BGR2GRAY)
-    _, thresholded = cv2.threshold(gray, 5, 255, cv2.THRESH_BINARY_INV)
+    _, thresholded = cv2.threshold(gray, 2, 255, cv2.THRESH_BINARY_INV)
     kernel = np.ones((3, 3), np.uint8)
     eroded = cv2.erode(thresholded, kernel, iterations=2)
     distanceTransform = cv2.distanceTransform(eroded, cv2.DIST_L2, 3)
     distanceTransform = cv2.erode(distanceTransform, kernel, iterations=3)
 
     centerX, centerY = _getCenterPoint(distanceTransform)
-    bigMaskRadius, smallMaskRadius = _getMaskRadius(distanceTransform, (centerX, centerY), 10)
+    bigMaskRadius, smallMaskRadius = _getMaskRadius(distanceTransform, (centerX, centerY), 5)
     rectMask = _getRectMask(distanceTransform)
     bigCircleMask = _getCircleMask(distanceTransform, (centerX, centerY), bigMaskRadius)
-    combined_mask = cv2.bitwise_or(rectMask, bigCircleMask)
     combinedSmallMask = cv2.bitwise_or(rectMask, bigCircleMask)
     smallCircleMask = _getCircleMask(distanceTransform, (centerX, centerY), smallMaskRadius)
+    combined_mask = cv2.bitwise_or(rectMask, smallCircleMask)
     return cv2.inpaint(rawImage, combined_mask, 5, cv2.INPAINT_TELEA)
     replacement = cv2.inpaint(rawImage, smallCircleMask, 5, cv2.INPAINT_TELEA)
     return removeBlackPixelsBelowThresh(impainting, replacement, 25)
