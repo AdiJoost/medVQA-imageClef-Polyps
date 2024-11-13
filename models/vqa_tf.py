@@ -14,7 +14,7 @@ MODEL_LOG_DIR = os.path.join(config.train_logs_path, os.path.basename(__file__).
 if not os.path.exists(MODEL_LOG_DIR):
     os.makedirs(MODEL_LOG_DIR)
 
-from dataset import get_dev_datasets
+from dataset_tf import get_dev_datasets
     
     
 def main():
