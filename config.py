@@ -8,7 +8,7 @@ cwd = os.getcwd()
 cwd = os.getcwd()
 
 
-models_path = join(cwd, "models", "trained")
+models_path = join(cwd, "models")
 notebooks_path = join(cwd, "notebooks")
 train_logs_path = join(models_path,"logs")
 

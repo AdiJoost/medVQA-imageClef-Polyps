@@ -1,3 +1,4 @@
+from typing import Optional
 import torch
 from torch.utils.data import Dataset, DataLoader
 from transformers import AutoTokenizer, AutoImageProcessor
@@ -172,8 +173,22 @@ def _collate_fn(batch):
     return (images, questions_padded, attention_masks_padded), labels
 
 
+import itertools
+
     
-def get_dev_data():
+def get_dev_data(debug_mode: bool | None = False) -> tuple[DataLoader, DataLoader, DataLoader]:
+    """
+    Returns the dataloaders of Train test val sets
+    the samples have form ((image, question, attentionmask), answer) 
+
+    Args:
+        debug_mode (bool | None, optional): if True will return only a few batches. 
+        Usefull to test if something works. 
+        Defaults to False.
+
+    Returns:
+        tuple[DataLoader, DataLoader, DataLoader]: Dataloaders with samples of form ((image, question, attentionmask), answer) 
+    """
     image_processor = AutoImageProcessor.from_pretrained("microsoft/beit-base-patch16-224-pt22k-ft22k")
     tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
     mlb = _get_label_encoder()
@@ -189,6 +204,11 @@ def get_dev_data():
     train_loader = DataLoader(train_dataset, batch_size=64, shuffle=False, collate_fn=_collate_fn)
     test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False, collate_fn=_collate_fn)
     val_loader = DataLoader(val_dataset, batch_size=64, shuffle=False, collate_fn=_collate_fn)
+
+    if debug_mode:
+        train_loader = list(itertools.islice(train_loader, 5))
+        test_loader = list(itertools.islice(test_loader, 5))
+        val_loader = list(itertools.islice(val_loader, 5))
 
     print("Data loaded successfully in PyTorch format.")
 
