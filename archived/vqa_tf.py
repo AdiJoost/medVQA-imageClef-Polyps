@@ -1,22 +1,20 @@
 import tensorflow as tf
 import os
 from keras import Model, models,  layers, utils, callbacks, optimizers, losses, metrics
-from keras.applications import ResNet50
-
 import config
 import datetime
-from transformers import ViTFeatureExtractor, TFViTModel, BertTokenizer
+from transformers import AutoTokenizer, AutoFeatureExtractor, AutoModel, TfAutoModelForImageClassification
 import tensorflow_hub as hub
 import numpy as np
 
 
 MODEL_NAME = os.path.basename(__file__).split(".")[0] + ".keras"
 MODEL_PATH = os.path.join(config.trained_model_path, MODEL_NAME)
-MODEL_LOG_DIR = os.path.join(config.train_logs_path, __file__)
+MODEL_LOG_DIR = os.path.join(config.train_logs_path, os.path.basename(__file__).split(".")[0])
 if not os.path.exists(MODEL_LOG_DIR):
     os.makedirs(MODEL_LOG_DIR)
 
-from dataset import get_dev_datasets
+from archived.dataset_tf import get_dev_datasets
     
     
 def main():
@@ -83,7 +81,7 @@ class ImageEncoder(layers.Layer):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         
-        base_model = ResNet50(weights='imagenet', include_top=False)
+        base_model = AutoModelForImageClassification.from_pretrained("microsoft/beit-base-patch16-224-pt22k-ft22k")  
         
         self.pre_trained = base_model
         self.pooling = layers.GlobalAveragePooling2D()
@@ -105,13 +103,11 @@ class QuestionEncoder(layers.Layer):
     def __init__(self,**kwargs):
         super().__init__(**kwargs)
         
-        self.bert_model = hub.load("https://tfhub.dev/google/experts/bert/wiki_books/sst2/2")
-        self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+        self.tokenizer = AutoModel.from_pretrained('bert-base-uncased')
         
     def call(self, question):
          #if isinstance(question, bytes)  else question # tf whyyyyyyyy??? you do this to me why is string now byte f you
-        inputs = self.tokenizer(question, return_tensors='tf', padding='max_length', max_length=64, truncation=True)
-        outputs = self.bert_model.signatures['tokens'](inputs)
+        outputs = self.bert_model.signatures['tokens'](question)
         question_embedding = outputs['pooled_output']
         return question_embedding
 

@@ -17,7 +17,12 @@ from sklearn.model_selection import train_test_split
 import numpy as np
 import tensorflow as tf
 import os
+from os.path import join
 import matplotlib.pyplot as plt
+from tqdm import tqdm
+
+from transformers import AutoTokenizer, AutoModel, AutoImageProcessor
+
 
 QUESTIONS_TO_BE_ANSWERED = [
     "What type of procedure is the image taken from?",
@@ -40,18 +45,18 @@ QUESTIONS_TO_BE_ANSWERED = [
     "What type of polyp is present?"
     ]
 
-
 def main():
+
     # encode_dev_data()
     train_ds,_,_ = get_dev_datasets()
     print(train_ds)
     
-def get_dev_datasets():
+def get_dev_datasets():  
     """
     Returns train_ds, test_ds, val_ds datasets of the dev portion of the date in format: ((image, question), answer_vector)
     """
     
-    if not os.path.exists(os.path.join(config.data_raw_dev, "X_train.npy")):
+    if not os.path.exists(join(config.data_processed_dev, "X_train.npy")):
         encode_dev_data()
         
     X_train, X_test, X_val, y_train, y_test, y_val = load_dev_data()
@@ -64,29 +69,57 @@ def get_dev_datasets():
 
 
 def dataset_from_X_y(X,y):
-    ds = tf.data.Dataset.from_tensor_slices((X,y))
-    ds = ds.map(lambda x,y: (load_image_from_ID(x), y), num_parallel_calls=tf.data.AUTOTUNE)
-    ds = ds.prefetch(buffer_size=tf.data.AUTOTUNE)
-    # probably need to tokenize/make the embedding for the question here already because of datatype issues when dealing with strings in the graph
     
+    # Separate the components
+    questions = [item[0] for item in X]  # tokenized questions (integers)
+    images = [item[1] for item in X]     # images (floats)
+    
+    # Create datasets separately
+    questions_ds = tf.data.Dataset.from_tensor_slices(questions)
+    images_ds = tf.data.Dataset.from_tensor_slices(images)
+    labels_ds = tf.data.Dataset.from_tensor_slices(y)
+    
+    ds = tf.data.Dataset.zip(((questions_ds, images_ds), labels_ds))
+    ds = ds.prefetch(buffer_size=tf.data.AUTOTUNE)
     return ds.batch(batch_size=64)
 
-def load_image_from_ID(X):
+def preprocess_X(X):
     """
     change the path here, to change, where the images are loaded from, later from processed folder
     """
-    image_id = X[0]  
-    question = X[1]  
     
-    image_path = tf.strings.join([config.data_raw_dev, str(image_id) + ".jpg"], separator=os.path.pathsep)
-    image = tf.io.read_file(image_path)
-    image = tf.image.decode_jpeg(image, channels=3)
-    # image = image / 255.0  # Normalize pixel values
+    ids = X[:,0]
+    images = [plt.imread(join(config.data_raw_dev_images, str(image_id) + ".jpg")) for image_id in ids]
+    questions = X[:,1]
+    
+    images_P = preprocess_images(images) # basically resizing, normalizing
+    questions_P = preprocess_question(questions) #tokenization
+        
+    return list(zip(images_P, questions_P))
 
-    return (image, question)
+def preprocess_images(images):
+    print("Processing images...")
+    # feature_extractor  = AutoFeatureExtractor.from_pretrained("microsoft/beit-base-patch16-224-pt22k-ft22k")
+    processor = AutoImageProcessor.from_pretrained("microsoft/beit-base-patch16-224-pt22k-ft22k")
+    processed_image = processor(images, return_tensors="tf")
+    return processed_image["pixel_values"]
+    
+def preprocess_question(questions):
+    print("Processing questions...")
+    tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
 
-
-
+    questions = list(questions)
+    tokenized_question = tokenizer(questions,
+                        padding='longest',
+                        max_length=24,
+                        truncation=True,
+                        return_tensors='tf',
+                        return_token_type_ids=False,
+                        return_attention_mask=False,
+                        )
+    
+    return tokenized_question["input_ids"]
+    
 def get_data():
     """
     Extracts the raw data from the zip files if it exists and puts them into the raw/(dev|test) folders
@@ -104,7 +137,6 @@ def get_data():
     if len(files_raw_test) == 1:
         test_zip = files_raw_test[0]
         unzip(test_zip, config.data_raw_test)
-    
 
 def unzip(zip_file, destination):
     with zipfile.ZipFile(zip_file, 'r') as zip_ref:
@@ -112,7 +144,6 @@ def unzip(zip_file, destination):
     print(f"Extracted contents to the '{destination}' folder.")
     os.remove(zip_file)
 
-    
 def encode_dev_data(save=True):
     mlb = get_label_encoder()
     X, y, startify = get_X_and_encoded_y(encoder=mlb)
@@ -120,20 +151,27 @@ def encode_dev_data(save=True):
 
     if save:
         os.makedirs(config.data_processed_dev, exist_ok=True)
-        np.save(os.path.join(config.data_processed_dev, "X_train.npy"), X_train)
-        np.save(os.path.join(config.data_processed_dev, "y_train.npy"), y_train)
-        np.save(os.path.join(config.data_processed_dev, "X_test.npy"), X_test)
-        np.save(os.path.join(config.data_processed_dev, "y_test.npy"), y_test)
-        np.save(os.path.join(config.data_processed_dev, "X_val.npy"), X_val)
-        np.save(os.path.join(config.data_processed_dev, "y_val.npy"), y_val)
+        np.save(join(config.data_processed_dev, "X_train.npy"), X_train)
+        np.save(join(config.data_processed_dev, "y_train.npy"), y_train)
+        np.save(join(config.data_processed_dev, "X_test.npy"), X_test)
+        np.save(join(config.data_processed_dev, "y_test.npy"), y_test)
+        np.save(join(config.data_processed_dev, "X_val.npy"), X_val)
+        np.save(join(config.data_processed_dev, "y_val.npy"), y_val)
 
 def load_dev_data():
-    X_train = np.load(os.path.join(config.data_processed_dev, "X_train.npy"), allow_pickle=True)
-    y_train = np.load(os.path.join(config.data_processed_dev, "y_train.npy"), allow_pickle=True)
-    X_test = np.load(os.path.join(config.data_processed_dev, "X_test.npy"), allow_pickle=True)
-    y_test = np.load(os.path.join(config.data_processed_dev, "y_test.npy"), allow_pickle=True)
-    X_val = np.load(os.path.join(config.data_processed_dev, "X_val.npy"), allow_pickle=True)
-    y_val = np.load(os.path.join(config.data_processed_dev, "y_val.npy"), allow_pickle=True)
+    X_train = np.load(join(config.data_processed_dev, "X_train.npy"), allow_pickle=True)
+    y_train = np.load(join(config.data_processed_dev, "y_train.npy"), allow_pickle=True)
+    X_test = np.load(join(config.data_processed_dev, "X_test.npy"), allow_pickle=True)
+    y_test = np.load(join(config.data_processed_dev, "y_test.npy"), allow_pickle=True)
+    X_val = np.load(join(config.data_processed_dev, "X_val.npy"), allow_pickle=True)
+    y_val = np.load(join(config.data_processed_dev, "y_val.npy"), allow_pickle=True)
+    
+   
+    X_train = preprocess_X(X_train[0:10])
+    X_test = preprocess_X(X_test[0:10])
+    X_val = preprocess_X(X_val[0:10])
+
+
     return X_train, X_test, X_val, y_train, y_test, y_val
     
 def get_label_encoder():
@@ -160,7 +198,6 @@ def get_label_encoder():
     mlb = MultiLabelBinarizer()
     mlb.fit([labels])
     return mlb
-
 
 def encode_answer(answers, encoder):
     answer_binarized = encoder.transform([answers])
@@ -215,9 +252,6 @@ def train_test_val_split_stratified(X, y, stratify):
         X_test, y_test, test_size=0.5, random_state=42, stratify=stratify_test
     )
     return X_train, X_test, X_val, y_train, y_test, y_val
-
-
-
 
 if __name__ == "__main__":
     main()

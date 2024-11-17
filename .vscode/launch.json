@@ -4,11 +4,18 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
+
         {
-            "name": "Python Debugger: Module",
+            "name": "vqa_tf",
             "type": "debugpy",
             "request": "launch",
-            "module": "vqa_base.py"
+            "module": "models.vqa_tf"
+        },
+        {
+            "name": "vqa_torch",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "models.vqa_torch"
         }
     ]
 }
