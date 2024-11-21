@@ -20,7 +20,7 @@ when debugging select: debug using launch.json configuration
 
 ## Paths
 Paths that are used in multiple locations should be defined in config.py
-Always build paths using os.path.join pr with Pathlib! 
+Always build paths using os.path.join or with Pathlib! 
 
 
 ## Variables
@@ -39,3 +39,9 @@ Create
 conda env create -f environment.yml
 
 Update
+
+
+# gpu
+
+For training / testing use the test.bash / trainer.bash
+They will execute the corresponding python files on the gpu

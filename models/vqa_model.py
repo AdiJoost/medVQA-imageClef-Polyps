@@ -5,15 +5,14 @@ import torch.optim as optim
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import LambdaLR
 import torch.utils.data.dataloader
-import torchmetrics
-from transformers import AutoTokenizer, AutoModel, AutoModelForImageClassification
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+from transformers import AutoModel
 from torch.utils.tensorboard import SummaryWriter
 import os
 import datetime
-from datahandling import get_dev_data
 from tqdm import tqdm
 import config 
-from torchsummary import summary
+from datahandling import load_multilabel_binarizer
 
 # Setup paths and constants
 MODEL_NAME = "vqa_model.pth"
@@ -22,9 +21,13 @@ LOG_DIR = os.path.join(config.train_logs_path, datetime.datetime.now().strftime(
 if not os.path.exists(LOG_DIR):
     os.makedirs(LOG_DIR)
 writer = SummaryWriter(LOG_DIR)
+print(f"Find logs at {LOG_DIR}")
+
+
+mlb = load_multilabel_binarizer()
 
 # Constants
-NUM_LABELS = 117
+NUM_LABELS = len(mlb.classes_)
 LEARNING_RATE = 5e-5
 WEIGHT_DECAY = 0.01
 
@@ -95,7 +98,7 @@ class Classifier(nn.Module):
         x = torch.relu(x)
         x = self.dropout(x)
         logits = self.fc_2(x)
-        return logits # BCEwithlogits combines sigmoid and bceloss (takes logits as input)
+        return logits # BCEwithlogits combines sigmoid and bceloss (takes logits as input) it is more numerically stable to use the one with bcewithlogits
 
 
 def get_optimizer(model: nn.Module) -> torch.optim.Optimizer:
@@ -198,20 +201,21 @@ def validate_epoch(model: nn.Module,
     
     return epoch_loss / len(dataloader), y_pred, y_true # returns average loss over all batches in dataset, the predicted labels and true labels
 
+
 def train_model(model: nn.Module, 
                 train_loader: torch.utils.data.DataLoader, 
                 val_loader: torch.utils.data.DataLoader, 
                 num_epochs: int, 
                 device: torch.device):
     """
-    Trains the VQA Model with procided data, for num_epochs 
+    Trains the VQA Model with provided data, for num_epochs 
 
     Args:
         model (nn.Module): The VQA Model
-        train_loader (torch.utils.data.DataLoader): Train Data with ((image, question, attentionmask),answer) format per sample
-        val_loader (torch.utils.data.DataLoader): Val Data with ((image, question, attentionmask),answer) format per sample
-        num_epochs (int): number of epochs to train the model
-        device (torch.device): the device to train on
+        train_loader (torch.utils.data.DataLoader): Train Data with ((image, question, attentionmask), answer) format per sample
+        val_loader (torch.utils.data.DataLoader): Val Data with ((image, question, attentionmask), answer) format per sample
+        num_epochs (int): Number of epochs to train the model
+        device (torch.device): The device to train on
     """
     
     criterion = nn.BCEWithLogitsLoss()
@@ -221,30 +225,34 @@ def train_model(model: nn.Module,
     best_f1 = 0
     for epoch in range(num_epochs):
         train_loss = train_epoch(model, train_loader, optimizer, criterion, device)
-        val_loss, val_outputs, val_labels = validate_epoch(model, val_loader, criterion, device)
+        val_loss, y_pred, y_true = validate_epoch(model, val_loader, criterion, device)
         
-        # Calculate metrics
-        # multilabel: bc. multiple answers can be predicted as 1 in the answer vector
-        # TODO Check if this is correct!!! 
-        accuracy = torchmetrics.functional.accuracy(val_outputs, val_labels.int(), task="multilabel", average='macro', multidim_average='global', num_labels=NUM_LABELS)
-        precision = torchmetrics.functional.precision(val_outputs, val_labels.int(), task="multilabel", average='macro', multidim_average='global', num_labels=NUM_LABELS)
-        recall = torchmetrics.functional.recall(val_outputs, val_labels.int(), task="multilabel", average='macro', multidim_average='global', num_labels=NUM_LABELS)
-        f1_score = torchmetrics.functional.f1_score(val_outputs, val_labels.int(), task="multilabel", average='macro', multidim_average='global', num_labels=NUM_LABELS)
+        # last layer outputs logits sigmoid(logits) -> probabilities
+        y_pred = torch.sigmoid(y_pred).detach().cpu() >= 0.5  # Threshold predictions
+        y_true = y_true.detach().cpu()
 
+        # Compute metrics
+        accuracy = accuracy_score(y_true, y_pred)
+        precision = precision_score(y_true, y_pred, average="samples", zero_division=0)
+        recall = recall_score(y_true, y_pred, average="samples", zero_division=0)
+        f1 = f1_score(y_true, y_pred, average="samples", zero_division=0)
+
+        # Log metrics
         writer.add_scalar('Loss/train', train_loss, epoch)
         writer.add_scalar('Loss/val', val_loss, epoch)
-        writer.add_scalar('F1 Score/val', f1_score, epoch)
+        writer.add_scalar('F1/val', f1, epoch)
         writer.add_scalar('accuracy/val', accuracy, epoch)
         writer.add_scalar('precision/val', precision, epoch)
         writer.add_scalar('recall/val', recall, epoch)
 
-
         # Save the model if it improved
-        if f1_score > best_f1:
-            best_f1 = f1_score
+        if f1 > best_f1:
+            best_f1 = f1
             torch.save(model.state_dict(), MODEL_PATH)
         
-        print(f"Epoch {epoch+1}/{num_epochs}, Train Loss: {train_loss}, Val Loss: {val_loss}, F1 Score: {f1_score},  accuracy: {accuracy},  precision: {precision},  recall: {recall}")
+        print(f"Epoch {epoch+1}/{num_epochs}, Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}, "
+              f"F1 Score: {f1:.4f}, Accuracy: {accuracy:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}")
         
         scheduler.step()
-
+    
+    writer.flush()

@@ -1,4 +1,4 @@
-from typing import Optional
+import sklearn.preprocessing
 import torch
 from torch.utils.data import Dataset, DataLoader
 from transformers import AutoTokenizer, AutoImageProcessor
@@ -12,7 +12,7 @@ import json
 from PIL import Image
 import config
 from torch.nn.utils.rnn import pad_sequence
-
+import joblib
 
 
 QUESTIONS_TO_BE_ANSWERED = [
@@ -49,7 +49,7 @@ class VQADataset(Dataset):
     def __getitem__(self, idx):
         question = self.X[idx][1]
         image_id = self.X[idx][0]
-        image_path = join(config.data_raw_dev_images, f"{image_id}.jpg")
+        image_path = join(config.data_processed_dev, f"{image_id}.jpg")
         
         # Load and preprocess image
         image = Image.open(image_path).convert('RGB')
@@ -88,21 +88,43 @@ def _get_label_encoder():
     with open(labels_json_path, "r") as f:
         data = json.load(f)
     
-    question_answers = {}
+    question_answers = dict()
     for image in data:
-        for label in image["Labels"]:
+        for label in image["Labels"]: # each label is a dict with Question, Answers
             if label["Question"] in QUESTIONS_TO_BE_ANSWERED:
                 if label["Question"] not in question_answers:
                     question_answers[label["Question"]] = []
                 
+                
                 question_answers[label["Question"]] += [label["Question"] + "_" + answer for answer in label["Answer"]]  
                 question_answers[label["Question"]] = list(set(question_answers[label["Question"]]))
 
-    labels = [item for sublist in question_answers.values() for item in sublist]
+    # add no answer option for each question
+    # necessary because even if the question has no answer on this image, we still need an answer to compare to.
+    for q in question_answers:
+        question_answers[q].append(q + "_")
+
+    labels = [item for sublist in question_answers.values() for item in sublist] # dont touch
     mlb = MultiLabelBinarizer()
     mlb.fit([labels])
+    
+    # save mlb
+    _save_multilabel_binarizer(mlb)
+    
     return mlb
 
+
+def _save_multilabel_binarizer(mlb: MultiLabelBinarizer) -> None:
+    joblib.dump(mlb, join(config.trained_model_path, "multilabel_binarizer.pkl"))
+
+def load_multilabel_binarizer() -> MultiLabelBinarizer:
+    path = join(config.trained_model_path,  "multilabel_binarizer.pkl" )
+    if os.path.exists(path):
+        mlb = joblib.load(path)
+    else:
+        raise FileNotFoundError("Delete the numpy files in the data/processed folder, to ensure the same MultilabelBinarizer is used to convert the answers back from binary vector")
+    return mlb 
+    
 def _encode_answer(answers, encoder):
     return encoder.transform([answers])[0]
 
@@ -111,7 +133,6 @@ def _get_X_and_encoded_y(encoder):
     with open(labels_json_path, "r") as f:
         data = json.load(f)
 
-    no_answer_vector = np.zeros(shape=(117,), dtype=np.int32)
     stratify_question = "Are there any abnormalities in the image?"
 
     X, y, stratify = [], [], []
@@ -128,7 +149,9 @@ def _get_X_and_encoded_y(encoder):
                 answers = answers_all_questions[q_index]
                 answer_vector = _encode_answer([q + "_" + answer for answer in answers], encoder=encoder)
             else:
-                answer_vector = no_answer_vector
+                # if the question is not asked for this image
+                # add "TheQuestion_" indicating no answer for this question is the right answer
+                answer_vector = _encode_answer([q + "_"], encoder=encoder)
 
             X.append([image_id, q])
             y.append(answer_vector)

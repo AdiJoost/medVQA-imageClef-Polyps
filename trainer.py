@@ -4,16 +4,13 @@ from datahandling import get_dev_data
 from tqdm import tqdm
 import config 
 
-from models.vqa_model import VQA, train_model
-
-
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Running on device: {device}")
-
 train_loader, val_loader, test_loader = get_dev_data(debug_mode=False)  
 
 # Initialize model and move to device
+from models.vqa_model import VQA, train_model
 model = VQA().to(device)
 
 print(model)
