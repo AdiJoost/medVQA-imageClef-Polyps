@@ -14,7 +14,7 @@ import config
 from torch.nn.utils.rnn import pad_sequence
 import joblib
 
-MODEL_ID = "facebook/dinov2-giant"
+MODEL_ID = "facebook/dinov2-large"
 # "meta-llama/Llama-3.2-11B-Vision-Instruct" 
 # # "microsoft/beit-base-patch16-224-pt22k-ft22k"
 

@@ -207,7 +207,57 @@ def validate_epoch(model: nn.Module,
     
     return epoch_loss / len(dataloader), y_pred, y_true # returns average loss over all batches in dataset, the predicted labels and true labels
 
-
 def train_model(model: nn.Module, 
                 train_loader: torch.utils.data.DataLoader, 
-       
+                val_loader: torch.utils.data.DataLoader, 
+                num_epochs: int, 
+                device: torch.device):
+    """
+    Trains the VQA Model with provided data, for num_epochs 
+
+    Args:
+        model (nn.Module): The VQA Model
+        train_loader (torch.utils.data.DataLoader): Train Data with ((image, question, attentionmask), answer) format per sample
+        val_loader (torch.utils.data.DataLoader): Val Data with ((image, question, attentionmask), answer) format per sample
+        num_epochs (int): Number of epochs to train the model
+        device (torch.device): The device to train on
+    """
+    
+    criterion = nn.BCEWithLogitsLoss()
+    optimizer = get_optimizer(model)
+    scheduler = get_scheduler(optimizer)
+
+    best_f1 = 0
+    for epoch in range(num_epochs):
+        train_loss = train_epoch(model, train_loader, optimizer, criterion, device)
+        val_loss, y_pred, y_true = validate_epoch(model, val_loader, criterion, device)
+        
+        # last layer outputs logits sigmoid(logits) -> probabilities
+        y_pred = torch.sigmoid(y_pred).detach().cpu() >= 0.5  # Threshold predictions
+        y_true = y_true.detach().cpu()
+
+        # Compute metrics
+        accuracy = accuracy_score(y_true, y_pred)
+        precision = precision_score(y_true, y_pred, average="samples", zero_division=0)
+        recall = recall_score(y_true, y_pred, average="samples", zero_division=0)
+        f1 = f1_score(y_true, y_pred, average="samples", zero_division=0)
+
+        # Log metrics
+        writer.add_scalar('Loss/train', train_loss, epoch)
+        writer.add_scalar('Loss/val', val_loss, epoch)
+        writer.add_scalar('F1/val', f1, epoch)
+        writer.add_scalar('accuracy/val', accuracy, epoch)
+        writer.add_scalar('precision/val', precision, epoch)
+        writer.add_scalar('recall/val', recall, epoch)
+
+        # Save the model if it improved
+        if f1 > best_f1:
+            best_f1 = f1
+            torch.save(model.state_dict(), MODEL_PATH)
+        
+        print(f"Epoch {epoch+1}/{num_epochs}, Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}, "
+              f"F1 Score: {f1:.4f}, Accuracy: {accuracy:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}")
+        
+        scheduler.step()
+    
+    writer.flush()
