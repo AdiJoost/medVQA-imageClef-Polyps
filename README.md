@@ -45,3 +45,9 @@ Update
 
 For training / testing use the test.bash / trainer.bash
 They will execute the corresponding python files on the gpu
+
+
+
+# vision instruct
+For the vision instruct model you will need to get a access token , follow this guide https://drlee.io/llama-3-2-a-step-by-step-guide-to-language-vision-and-fine-tuning-in-google-colab-260157fba89f
+and https://huggingface.co/docs/huggingface_hub/en/guides/cli#huggingface-cli-login

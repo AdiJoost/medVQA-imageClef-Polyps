@@ -6,7 +6,7 @@ from torch.optim import AdamW
 from torch.optim.lr_scheduler import LambdaLR
 import torch.utils.data.dataloader
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
-from transformers import AutoModel
+from transformers import AutoModel, AutoModelForImageTextToText
 from torch.utils.tensorboard import SummaryWriter
 import os
 import datetime
@@ -15,7 +15,7 @@ import config
 from datahandling import load_multilabel_binarizer
 
 # Setup paths and constants
-MODEL_NAME = "vqa_model.pth"
+MODEL_NAME = "vqa_model_vision_instruct.pth"
 MODEL_PATH = os.path.join(config.trained_model_path, MODEL_NAME)
 LOG_DIR = os.path.join(config.train_logs_path, datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
 if not os.path.exists(LOG_DIR):
@@ -37,9 +37,10 @@ class VQA(nn.Module):
     """
     VQA Model class that gets the embeddings of the different modalities and then gets a prediction from the classifier
     """
-    def __init__(self):
+    def __init__(self, vision_model_id: str = "microsoft/beit-base-patch16-224-pt22k-ft22k"):
         super(VQA, self).__init__()
-        self.image_encoder = ImageEncoder()
+        self.vision_model_id = vision_model_id
+        self.image_encoder = ImageEncoder(self.vision_model_id)
         self.question_encoder = QuestionEncoder()
         self.classifier = Classifier(self.image_encoder.output_dim, self.question_encoder.output_dim)
         
@@ -53,9 +54,14 @@ class ImageEncoder(nn.Module):
     The Image Encoder Takes the image as input and gets an embedding from the pretrained model
     We take the pooled output
     """
-    def __init__(self):
+    def __init__(self, vision_model_id: str):
+        """
+        Args:
+            vision_model_id (str): the model_id from huggingface 
+        """
         super(ImageEncoder, self).__init__()
-        self.pre_trained = AutoModel.from_pretrained("microsoft/beit-base-patch16-224-pt22k-ft22k")        
+        self.vision_model_id = vision_model_id
+        self.pre_trained = AutoModel.from_pretrained(self.vision_model_id)          
         self.output_dim = self.pre_trained.config.hidden_size
 
     def forward(self, image):
@@ -204,55 +210,4 @@ def validate_epoch(model: nn.Module,
 
 def train_model(model: nn.Module, 
                 train_loader: torch.utils.data.DataLoader, 
-                val_loader: torch.utils.data.DataLoader, 
-                num_epochs: int, 
-                device: torch.device):
-    """
-    Trains the VQA Model with provided data, for num_epochs 
-
-    Args:
-        model (nn.Module): The VQA Model
-        train_loader (torch.utils.data.DataLoader): Train Data with ((image, question, attentionmask), answer) format per sample
-        val_loader (torch.utils.data.DataLoader): Val Data with ((image, question, attentionmask), answer) format per sample
-        num_epochs (int): Number of epochs to train the model
-        device (torch.device): The device to train on
-    """
-    
-    criterion = nn.BCEWithLogitsLoss()
-    optimizer = get_optimizer(model)
-    scheduler = get_scheduler(optimizer)
-
-    best_f1 = 0
-    for epoch in range(num_epochs):
-        train_loss = train_epoch(model, train_loader, optimizer, criterion, device)
-        val_loss, y_pred, y_true = validate_epoch(model, val_loader, criterion, device)
-        
-        # last layer outputs logits sigmoid(logits) -> probabilities
-        y_pred = torch.sigmoid(y_pred).detach().cpu() >= 0.5  # Threshold predictions
-        y_true = y_true.detach().cpu()
-
-        # Compute metrics
-        accuracy = accuracy_score(y_true, y_pred)
-        precision = precision_score(y_true, y_pred, average="samples", zero_division=0)
-        recall = recall_score(y_true, y_pred, average="samples", zero_division=0)
-        f1 = f1_score(y_true, y_pred, average="samples", zero_division=0)
-
-        # Log metrics
-        writer.add_scalar('Loss/train', train_loss, epoch)
-        writer.add_scalar('Loss/val', val_loss, epoch)
-        writer.add_scalar('F1/val', f1, epoch)
-        writer.add_scalar('accuracy/val', accuracy, epoch)
-        writer.add_scalar('precision/val', precision, epoch)
-        writer.add_scalar('recall/val', recall, epoch)
-
-        # Save the model if it improved
-        if f1 > best_f1:
-            best_f1 = f1
-            torch.save(model.state_dict(), MODEL_PATH)
-        
-        print(f"Epoch {epoch+1}/{num_epochs}, Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}, "
-              f"F1 Score: {f1:.4f}, Accuracy: {accuracy:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}")
-        
-        scheduler.step()
-    
-    writer.flush()
+       

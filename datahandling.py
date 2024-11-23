@@ -14,6 +14,9 @@ import config
 from torch.nn.utils.rnn import pad_sequence
 import joblib
 
+MODEL_ID = "facebook/dinov2-giant"
+# "meta-llama/Llama-3.2-11B-Vision-Instruct" 
+# # "microsoft/beit-base-patch16-224-pt22k-ft22k"
 
 QUESTIONS_TO_BE_ANSWERED = [
     "What type of procedure is the image taken from?",
@@ -22,7 +25,7 @@ QUESTIONS_TO_BE_ANSWERED = [
     "Where in the image is the abnormality?",
     "Is this finding easy to detect?",
     "Where in the image is the instrument?",
-    "Is there a green/black box artifact?",
+    "Is there a green/black box artefact?", # corrected to artefact to match
     "Are there any abnormalities in the image?",
     "Is there text?",
     "Are there any anatomical landmarks in the image?",
@@ -72,14 +75,14 @@ class VQADataset(Dataset):
 
 def _load_dev_data():
     if not os.path.exists(join(config.data_processed_dev, "X_train.npy")):
-        _encode_dev_data()
-    
-    X_train = np.load(join(config.data_processed_dev, "X_train.npy"), allow_pickle=True)
-    y_train = np.load(join(config.data_processed_dev, "y_train.npy"), allow_pickle=True)
-    X_test = np.load(join(config.data_processed_dev, "X_test.npy"), allow_pickle=True)
-    y_test = np.load(join(config.data_processed_dev, "y_test.npy"), allow_pickle=True)
-    X_val = np.load(join(config.data_processed_dev, "X_val.npy"), allow_pickle=True)
-    y_val = np.load(join(config.data_processed_dev, "y_val.npy"), allow_pickle=True)
+        X_train, X_test, X_val, y_train, y_test, y_val = _encode_dev_data(save=False) # bc we need to change it so much
+    else:
+        X_train = np.load(join(config.data_processed_dev, "X_train.npy"), allow_pickle=True)
+        y_train = np.load(join(config.data_processed_dev, "y_train.npy"), allow_pickle=True)
+        X_test = np.load(join(config.data_processed_dev, "X_test.npy"), allow_pickle=True)
+        y_test = np.load(join(config.data_processed_dev, "y_test.npy"), allow_pickle=True)
+        X_val = np.load(join(config.data_processed_dev, "X_val.npy"), allow_pickle=True)
+        y_val = np.load(join(config.data_processed_dev, "y_val.npy"), allow_pickle=True)
 
     return X_train, X_test, X_val, y_train, y_test, y_val
 
@@ -182,6 +185,8 @@ def _encode_dev_data(save=True):
         np.save(join(config.data_processed_dev, "y_test.npy"), y_test)
         np.save(join(config.data_processed_dev, "X_val.npy"), X_val)
         np.save(join(config.data_processed_dev, "y_val.npy"), y_val)
+    
+    return X_train, X_test, X_val, y_train, y_test, y_val
 
 def _collate_fn(batch):
     images, questions, attention_masks, labels = zip(
@@ -212,7 +217,7 @@ def get_dev_data(debug_mode: bool | None = False) -> tuple[DataLoader, DataLoade
     Returns:
         tuple[DataLoader, DataLoader, DataLoader]: Dataloaders with samples of form ((image, question, attentionmask), answer) 
     """
-    image_processor = AutoImageProcessor.from_pretrained("microsoft/beit-base-patch16-224-pt22k-ft22k")
+    image_processor = AutoImageProcessor.from_pretrained(MODEL_ID)
     tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
     mlb = _get_label_encoder()
 
