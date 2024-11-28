@@ -1,4 +1,3 @@
-import sklearn.preprocessing
 import torch
 from torch.utils.data import Dataset, DataLoader
 from transformers import AutoTokenizer, AutoImageProcessor
@@ -14,7 +13,7 @@ import config
 from torch.nn.utils.rnn import pad_sequence
 import joblib
 
-MODEL_ID = "facebook/dinov2-large"
+# MODEL_ID = "facebook/dinov2-large"
 # "meta-llama/Llama-3.2-11B-Vision-Instruct" 
 # # "microsoft/beit-base-patch16-224-pt22k-ft22k"
 
@@ -204,20 +203,21 @@ def _collate_fn(batch):
 import itertools
 
     
-def get_dev_data(debug_mode: bool | None = False) -> tuple[DataLoader, DataLoader, DataLoader]:
+def get_dev_data(image_processor_model_id: str, debug_mode: bool | None = False ) -> tuple[DataLoader, DataLoader, DataLoader]:
     """
     Returns the dataloaders of Train test val sets
     the samples have form ((image, question, attentionmask), answer) 
 
     Args:
         debug_mode (bool | None, optional): if True will return only a few batches. 
+        image_processor_model_id (str): model_id
         Usefull to test if something works. 
         Defaults to False.
 
     Returns:
         tuple[DataLoader, DataLoader, DataLoader]: Dataloaders with samples of form ((image, question, attentionmask), answer) 
     """
-    image_processor = AutoImageProcessor.from_pretrained(MODEL_ID)
+    image_processor = AutoImageProcessor.from_pretrained(image_processor_model_id)
     tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
     mlb = _get_label_encoder()
 

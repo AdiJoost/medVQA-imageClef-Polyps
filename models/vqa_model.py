@@ -15,8 +15,6 @@ import config
 from datahandling import load_multilabel_binarizer
 
 # Setup paths and constants
-MODEL_NAME = "vqa_model_vision_instruct.pth"
-MODEL_PATH = os.path.join(config.trained_model_path, MODEL_NAME)
 LOG_DIR = os.path.join(config.train_logs_path, datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
 if not os.path.exists(LOG_DIR):
     os.makedirs(LOG_DIR)
@@ -61,12 +59,20 @@ class ImageEncoder(nn.Module):
         """
         super(ImageEncoder, self).__init__()
         self.vision_model_id = vision_model_id
-        self.pre_trained = AutoModel.from_pretrained(self.vision_model_id)          
+        self.pre_trained = AutoModel.from_pretrained(self.vision_model_id, trust_remote_code=True)          
         self.output_dim = self.pre_trained.config.hidden_size
 
     def forward(self, image):
         outputs = self.pre_trained(pixel_values=image)
-        image_embedding = outputs.pooler_output # single vector (instead of embeddings for different patches for example)
+        
+        if hasattr(outputs, "pooler_output"):
+            pooled_output = outputs.pooler_output
+        else:
+            # Fallback to mean pooling over the last_hidden_state
+            last_hidden_state = outputs.last_hidden_state  # Shape: [batch_size, seq_len, hidden_dim]
+            pooled_output = last_hidden_state.mean(dim=1)  # Mean pooling along sequence length
+                    
+        image_embedding = pooled_output
         return image_embedding
 
 class QuestionEncoder(nn.Module):
@@ -208,6 +214,7 @@ def validate_epoch(model: nn.Module,
     return epoch_loss / len(dataloader), y_pred, y_true # returns average loss over all batches in dataset, the predicted labels and true labels
 
 def train_model(model: nn.Module, 
+                model_name: str,
                 train_loader: torch.utils.data.DataLoader, 
                 val_loader: torch.utils.data.DataLoader, 
                 num_epochs: int, 
@@ -253,7 +260,7 @@ def train_model(model: nn.Module,
         # Save the model if it improved
         if f1 > best_f1:
             best_f1 = f1
-            torch.save(model.state_dict(), MODEL_PATH)
+            torch.save(model.state_dict(), os.path.join(config.trained_model_path, model_name))
         
         print(f"Epoch {epoch+1}/{num_epochs}, Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}, "
               f"F1 Score: {f1:.4f}, Accuracy: {accuracy:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}")

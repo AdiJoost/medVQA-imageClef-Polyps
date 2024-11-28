@@ -4,7 +4,7 @@ from datahandling import get_dev_data
 from tqdm import tqdm
 import config 
 
-model_id = "microsoft/beit-base-patch16-224-pt22k-ft22k"
+model_id = "facebook/dinov2-large"
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -19,7 +19,7 @@ print(model)
 print(f"Number of parameters in model: {sum([param.nelement() for param in model.parameters()])}")
 
 train_model(model,
-            "vqa_beit.pth",
+            "vqa_dinov2.pth",
             train_loader, 
             val_loader,
             num_epochs=15, 
